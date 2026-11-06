@@ -17,7 +17,6 @@
     .admin-login { max-width:420px; margin:8vh auto 0; }
     .admin-form { display:grid; gap:12px; margin-top:18px; }
     .admin-form label { display:grid; gap:6px; color:#aab8c8; font:9px ui-monospace,monospace; letter-spacing:.12em; }
-    .admin-form input, .key-box { width:100%; min-height:42px; border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:10px 12px; color:#f7f4ed; background:#101b2b; font:13px system-ui,sans-serif; }
     .admin-button { min-height:40px; padding:0 14px; border:0; border-radius:9px; background:var(--teal); color:#12283a; font:900 10px ui-monospace,monospace; letter-spacing:.08em; cursor:pointer; }
     .admin-button.secondary { border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05); color:#e9f1f5; }
     .admin-button.danger { border:1px solid rgba(255,141,121,.4); background:rgba(255,141,121,.08); color:#ffac9e; }
@@ -29,15 +28,10 @@
     .asset-card h3 { margin:0 0 5px; font-size:14px; }
     .asset-card p { min-height:32px; margin:0 0 12px; color:var(--muted); font-size:11px; line-height:1.45; }
     .asset-current { min-height:58px; display:flex; align-items:center; gap:10px; margin-bottom:12px; color:#9aabba; font-size:11px; overflow-wrap:anywhere; }
-    .asset-current img { width:58px; height:58px; object-fit:cover; border-radius:9px; border:1px solid var(--line); }
+    .asset-current img { width:84px; height:84px; object-fit:contain; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,.04); }
     .asset-current audio { width:100%; max-width:260px; height:36px; }
     .asset-actions { display:flex; flex-wrap:wrap; gap:8px; }
     .file-picker { display:block; margin:0 0 10px; color:#aab8c8; font-size:11px; }
-    .key-section { margin-top:20px; }
-    .key-output { display:none; margin-top:12px; padding:12px; border:1px dashed rgba(121,224,204,.45); border-radius:10px; background:rgba(121,224,204,.06); }
-    .key-output.visible { display:block; }
-    .key-output code { display:block; margin:8px 0 12px; color:var(--teal); font-size:13px; overflow-wrap:anywhere; user-select:all; }
-    .muted-note { color:#8596a8 !important; font-size:10px !important; }
     .admin-tools { display:flex; gap:8px; flex-wrap:wrap; }
     .back-link { color:var(--teal); text-decoration:none; font:10px ui-monospace,monospace; }
     @media (max-width:620px) { .admin-assets { grid-template-columns:1fr; } .admin-shell { padding-top:20px; } .admin-panel { padding:16px; } }
@@ -49,7 +43,7 @@
       <div>
         <a class="brand" href="/" aria-label="Back to Sky Hop"><span class="brand-mark">✦</span><span>SKY HOP<span class="brand-period">.</span></span></a>
         <h1>Admin settings</h1>
-        <p>Choose the default images and sounds used by every visitor.</p>
+        <p>You control the default images and sounds. Visitors can only play the game.</p>
       </div>
       <a class="back-link" href="/">← BACK TO GAME</a>
     </header>
@@ -68,12 +62,12 @@
     <section id="dashboard" hidden>
       <div class="admin-panel">
         <div class="admin-tools" style="justify-content:space-between;align-items:center">
-          <div><h2>Default game assets</h2><p>Upload each asset once. The public game uses these files unless a visitor unlocks customisation.</p></div>
+          <div><h2>Default game assets</h2><p>Upload or replace these defaults. Every visitor receives the same setup.</p></div>
           <button class="admin-button secondary" id="logoutButton" type="button">SIGN OUT</button>
         </div>
         <div class="admin-assets">
           <article class="asset-card" data-kind="character">
-            <h3>Character image</h3><p>Replaces the default bird character.</p>
+            <h3>Friend face cutout</h3><p>Upload a transparent PNG cutout. The game uses it as the bird exactly as supplied, without circular cropping or background removal.</p>
             <div class="asset-current" data-current>No image selected.</div>
             <input class="file-picker" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
             <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE IMAGE</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
@@ -107,14 +101,6 @@
         </div>
       </div>
 
-      <div class="admin-panel key-section">
-        <h2>Visitor customisation key</h2>
-        <p>Visitors need this key to unlock their own local image and sound controls. Generating a new key immediately invalidates the previous one. The key is shown only once, so copy it and share it privately.</p>
-        <div class="admin-tools"><button class="admin-button" id="generateKeyButton" type="button">GENERATE NEW KEY</button><button class="admin-button danger" id="revokeKeyButton" type="button">REVOKE KEY</button></div>
-        <div class="key-output" id="keyOutput"><strong>Copy this key now</strong><code id="generatedKey"></code><button class="admin-button secondary" id="copyKeyButton" type="button">COPY KEY</button></div>
-        <p class="admin-status" id="keyStatus" aria-live="polite"></p>
-        <p class="muted-note">The server stores only a salted password hash, not the readable key.</p>
-      </div>
     </section>
   </main>
   <script src="admin.js"></script>

@@ -5,7 +5,6 @@
   const dashboard = $("dashboard");
   const loginStatus = $("loginStatus");
   const assetStatus = $("assetStatus");
-  const keyStatus = $("keyStatus");
 
   function status(element, message, isError = false) {
     element.textContent = message;
@@ -29,7 +28,7 @@
     const result = await api("/api/admin/assets");
     $("adminOpacity").value = result.game_over_opacity ?? 65;
     $("adminOpacityValue").textContent = `${$("adminOpacity").value}%`;
-    for (const card of document.querySelectorAll(".asset-card")) {
+    for (const card of document.querySelectorAll(".asset-card[data-kind]")) {
       const kind = card.dataset.kind;
       const asset = result.assets[kind];
       const current = card.querySelector("[data-current]");
@@ -76,7 +75,7 @@
     }
   });
 
-  document.querySelectorAll(".asset-card").forEach((card) => {
+  document.querySelectorAll(".asset-card[data-kind]").forEach((card) => {
     const kind = card.dataset.kind;
     const picker = card.querySelector("input[type=file]");
     const uploadButton = card.querySelector(".upload-button");
@@ -131,39 +130,6 @@
       status(assetStatus, "Image opacity saved.");
     } catch (error) {
       status(assetStatus, error.message, true);
-    }
-  });
-
-  $("generateKeyButton").addEventListener("click", async () => {
-    if (!confirm("Generate a new key? The previous visitor key will stop working.")) return;
-    try {
-      const result = await api("/api/admin/access-key", { method: "POST" });
-      $("generatedKey").textContent = result.key;
-      $("keyOutput").classList.add("visible");
-      status(keyStatus, "New key generated. Copy it now; it cannot be shown again.");
-    } catch (error) {
-      status(keyStatus, error.message, true);
-    }
-  });
-
-  $("revokeKeyButton").addEventListener("click", async () => {
-    if (!confirm("Revoke the visitor customisation key? All visitors will need a new key.")) return;
-    try {
-      await api("/api/admin/access-key", { method: "DELETE" });
-      $("keyOutput").classList.remove("visible");
-      status(keyStatus, "Visitor key revoked.");
-    } catch (error) {
-      status(keyStatus, error.message, true);
-    }
-  });
-
-  $("copyKeyButton").addEventListener("click", async () => {
-    const key = $("generatedKey").textContent;
-    try {
-      await navigator.clipboard.writeText(key);
-      status(keyStatus, "Key copied to clipboard.");
-    } catch {
-      status(keyStatus, "Select and copy the key above.", true);
     }
   });
 

@@ -6,11 +6,10 @@ Sky Hop is a browser-based Flappy Bird-style game with an owner dashboard. The p
 
 - Creator-selected character image, game-over image, flap sound, and collision sound.
 - Public visitors receive the creator's default assets.
-- Visitors can unlock local customisation by entering an owner-issued key.
-- Private `/admin` login for managing defaults and visitor keys.
-- PostgreSQL stores admin credentials, sessions, asset metadata, app settings, and the visitor-key hash.
+- Private `/admin` login for managing the four default assets.
+- PostgreSQL stores admin credentials, sessions, asset metadata, and app settings.
 - Neon Object Storage stores uploaded images and sounds. The bucket is `skyhop-assets` and uses `public_read` so the browser can fetch the selected defaults.
-- Visitor-uploaded custom assets remain local to that visitor's browser; they do not replace the creator defaults.
+- Public visitors cannot upload or change assets. They simply play using the creator-selected defaults.
 - Mobile double-tap page zoom is suppressed while normal scrolling and pinch zoom remain available.
 
 ## Configure local development
@@ -26,13 +25,13 @@ cp .env.example .env
 
 Fill `.env` with the pooled Neon connection string, Neon Object Storage S3 credentials, admin username/password, and a random `APP_SECRET_KEY`.
 
-Generate an application secret:
+The `APP_SECRET_KEY` is only an internal server secret used to protect the administrator login session. It is not a visitor access code. Render generates it automatically from the Blueprint. For local development, generate one with:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Keep `.env` private. It is excluded by `.gitignore`.
+Keep `.env` private. It is excluded by `.gitignore`. Visitors never need a token, key, or login.
 
 Run the application:
 
@@ -64,13 +63,12 @@ The app uses the pooled `DATABASE_URL` for normal web requests. The backend uses
 
 ## Admin workflow
 
-1. Sign in at `/admin` using the environment-configured admin username/password.
-2. Upload or replace the four default assets.
-3. Select **Generate new key** and copy the key. It is shown only once.
-4. Share that key privately with visitors who may customise their own browser session.
-5. Generate another key to invalidate the previous key, or revoke the key to lock customisation for everyone.
+1. Visit `/admin` and sign in with the configured administrator credentials.
+2. Upload or replace the friend face cutout, game-over image, flap sound, and collision sound.
+3. Adjust game-over image opacity and save.
+4. Visitors do not have upload controls or need access keys. They simply play with the current creator defaults.
 
-Visitor keys expire after 24 hours once exchanged for an access token. The server stores only a salted PBKDF2-SHA256 hash of the visitor key. Access tokens are HMAC-signed and tied to a key generation stored in Postgres, so rotating or revoking the key invalidates outstanding tokens.
+For the character, use a transparent PNG cutout where possible. The game renders the uploaded image as-is, preserving its aspect ratio and transparency. It does not crop the image into a circle or remove backgrounds automatically.
 
 ## Deploy on Render
 
@@ -91,10 +89,10 @@ The app's root route and `/admin` are served by FastAPI. Keep your previous Rend
 
 ## Security notes
 
-- Never commit `.env` or place admin passwords, visitor keys, database URLs, or S3 credentials in JavaScript.
-- Admin passwords and visitor keys are PBKDF2-SHA256 hashed with random salts.
+- Never commit `.env` or place admin passwords, database URLs, or S3 credentials in JavaScript.
+- Admin passwords are PBKDF2-SHA256 hashed with random salts.
 - Admin sessions use an HttpOnly, SameSite=Strict cookie.
-- Login and visitor-key attempts are rate-limited in-process. For multi-instance scaling, move rate limiting to a shared store.
+- Admin login attempts are rate-limited in-process. For multi-instance scaling, move rate limiting to a shared store.
 - Upload endpoints validate allowed extensions, size limits, and file signatures.
 - The S3 credential is server-side only. The bucket permits public reads, but only the server's scoped credential can write or delete objects.
-- A browser-only game cannot prevent a technically capable visitor from modifying their own page with developer tools. The key gate controls the normal UI and server-issued access token; it is not DRM.
+- Public visitors have no asset-management endpoints. Only requests with a valid admin session can upload, replace, or delete creator assets.

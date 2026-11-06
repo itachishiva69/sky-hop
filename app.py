@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import logging
 import mimetypes
 import os
@@ -17,7 +16,7 @@ from urllib.parse import quote, urlparse
 import boto3
 import psycopg
 from botocore.config import Config
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
@@ -40,7 +39,6 @@ AWS_REGION = os.getenv("AWS_REGION", "")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "skyhop-assets")
 
 SESSION_TTL = 60 * 60 * 12
-ACCESS_TTL = 60 * 60 * 24
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
 
@@ -58,10 +56,6 @@ AUTH_ATTEMPTS: dict[str, list[int]] = {}
 class LoginBody(BaseModel):
     username: str
     password: str
-
-
-class UnlockBody(BaseModel):
-    key: str
 
 
 class AdminSettingsBody(BaseModel):
@@ -162,14 +156,6 @@ def initialize_database() -> None:
             )"""
         )
         conn.execute(
-            """CREATE TABLE IF NOT EXISTS visitor_key (
-                id SMALLINT PRIMARY KEY CHECK (id = 1),
-                key_hash TEXT NOT NULL,
-                updated_at BIGINT NOT NULL,
-                generation TEXT NOT NULL
-            )"""
-        )
-        conn.execute(
             """CREATE TABLE IF NOT EXISTS app_settings (
                 setting_key TEXT PRIMARY KEY,
                 setting_value TEXT NOT NULL
@@ -241,41 +227,6 @@ def get_admin(request: Request) -> str:
     return str(row["username"])
 
 
-def sign_access_token(expires_at: int, generation: str) -> str:
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"scope": "customize", "exp": expires_at, "generation": generation}, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
-    signature = hmac.new(APP_SECRET.encode(), payload.encode(), hashlib.sha256).digest()
-    sig = base64.urlsafe_b64encode(signature).decode().rstrip("=")
-    return f"{payload}.{sig}"
-
-
-def verify_access_token(token: str) -> bool:
-    try:
-        payload, supplied_sig = token.split(".", 1)
-        expected = base64.urlsafe_b64encode(
-            hmac.new(APP_SECRET.encode(), payload.encode(), hashlib.sha256).digest()
-        ).decode().rstrip("=")
-        if not hmac.compare_digest(expected, supplied_sig):
-            return False
-        raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
-        data = json.loads(raw)
-        if data.get("scope") != "customize" or int(data.get("exp", 0)) <= int(time.time()):
-            return False
-        with db() as conn:
-            current = conn.execute("SELECT generation FROM visitor_key WHERE id = 1").fetchone()
-        return bool(current) and hmac.compare_digest(str(current["generation"]), str(data.get("generation", "")))
-    except (ValueError, TypeError, json.JSONDecodeError):
-        return False
-
-
-def require_access_token(authorization: str | None = Header(default=None)) -> None:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Customisation key required.")
-    if not verify_access_token(authorization[7:].strip()):
-        raise HTTPException(status_code=401, detail="Customisation access expired. Enter your key again.")
-
-
 def public_asset_map() -> dict:
     with db() as conn:
         rows = conn.execute("SELECT kind, object_key, original_name, updated_at FROM assets").fetchall()
@@ -345,7 +296,7 @@ def public_settings():
             "SELECT setting_value FROM app_settings WHERE setting_key = %s", ("game_over_opacity",)
         ).fetchone()
     opacity = int(row["setting_value"]) if row else 65
-    return {"assets": public_asset_map(), "game_over_opacity": opacity, "customization_requires_key": True}
+    return {"assets": public_asset_map(), "game_over_opacity": opacity}
 
 
 @app.post("/api/admin/login")
@@ -485,45 +436,3 @@ def save_admin_settings(body: AdminSettingsBody, request: Request, username: str
         )
     return {"ok": True, "game_over_opacity": body.game_over_opacity}
 
-
-@app.post("/api/admin/access-key")
-def generate_visitor_key(request: Request, username: str = Depends(get_admin)):
-    check_same_origin(request)
-    key = f"SKY-{secrets.token_urlsafe(20)}"
-    generation = secrets.token_urlsafe(18)
-    with db() as conn:
-        conn.execute(
-            "INSERT INTO visitor_key(id, key_hash, updated_at, generation) VALUES (1, %s, %s, %s) "
-            "ON CONFLICT(id) DO UPDATE SET key_hash=excluded.key_hash, updated_at=excluded.updated_at, generation=excluded.generation",
-            (pbkdf2_hash(key), int(time.time()), generation),
-        )
-    return {"ok": True, "key": key}
-
-
-@app.delete("/api/admin/access-key")
-def revoke_visitor_key(request: Request, username: str = Depends(get_admin)):
-    check_same_origin(request)
-    with db() as conn:
-        conn.execute("DELETE FROM visitor_key WHERE id = 1")
-    return {"ok": True}
-
-
-@app.post("/api/custom-access/unlock")
-def unlock_customization(body: UnlockBody, request: Request):
-    check_same_origin(request)
-    enforce_attempt_limit(request, "visitor-key", limit=10)
-    if len(body.key) > 200:
-        raise HTTPException(status_code=400, detail="Invalid key.")
-    with db() as conn:
-        row = conn.execute("SELECT key_hash, generation FROM visitor_key WHERE id = 1").fetchone()
-    if not row or not pbkdf2_verify(body.key.strip(), row["key_hash"]):
-        raise HTTPException(status_code=403, detail="That key is not valid.")
-    client_ip = request.client.host if request.client else "unknown"
-    AUTH_ATTEMPTS.pop(f"visitor-key:{client_ip}", None)
-    expires = int(time.time()) + ACCESS_TTL
-    return {"ok": True, "access_token": sign_access_token(expires, row["generation"]), "expires_at": expires}
-
-
-@app.get("/api/custom-access/verify")
-def verify_customization(_: None = Depends(require_access_token)):
-    return {"ok": True, "customization_unlocked": True}

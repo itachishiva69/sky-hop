@@ -19,12 +19,6 @@ CREATE TABLE IF NOT EXISTS assets (
     updated_at BIGINT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS visitor_key (
-    id SMALLINT PRIMARY KEY CHECK (id = 1),
-    key_hash TEXT NOT NULL,
-    updated_at BIGINT NOT NULL,
-    generation TEXT NOT NULL
-);
 
 CREATE TABLE IF NOT EXISTS app_settings (
     setting_key TEXT PRIMARY KEY,
