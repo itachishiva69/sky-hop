@@ -14,8 +14,10 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: #101b2b; }
+html { min-width: 320px; background: #101b2b; touch-action: manipulation; }
+/* Suppress double-tap page zoom while keeping scroll and pinch zoom available. */
 body {
+  touch-action: manipulation;
   margin: 0;
   min-height: 100svh;
   color: var(--ink);
@@ -23,7 +25,8 @@ body {
     radial-gradient(ellipse at 50% 0%, rgba(53, 90, 119, .22), transparent 48%),
     #101b2b;
 }
-button, a { font: inherit; }
+button, a { font: inherit; touch-action: manipulation; }
+input, select, textarea, label { touch-action: manipulation; }
 button { color: inherit; }
 .shell { width: min(1120px, calc(100% - 56px)); margin: 0 auto; }
 .topbar {
