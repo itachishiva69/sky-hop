@@ -46,7 +46,16 @@
   const lossSoundActions = document.getElementById("lossSoundActions");
   const lossSoundFileName = document.getElementById("lossSoundFileName");
   const removeLossSoundButton = document.getElementById("removeLossSoundButton");
+  const accessPanel = document.getElementById("accessPanel");
+  const accessUnlockForm = document.getElementById("accessUnlockForm");
+  const accessKeyInput = document.getElementById("accessKeyInput");
+  const accessMessage = document.getElementById("accessMessage");
 
+  let customizationUnlocked = false;
+  let defaultAssets = {};
+  let defaultAvatarImage = null;
+  let defaultAvatarUrl = null;
+  let defaultGameOverImageUrl = null;
   let avatarImage = null;
   let avatarObjectUrl = null;
   let flapAudioUrl = null;
@@ -115,7 +124,8 @@
     overlay.classList.remove("hidden");
     if (mode === "ready") {
       clearResultRevealTimer();
-      customizer.hidden = false;
+      customizer.hidden = !customizationUnlocked;
+      accessPanel.hidden = customizationUnlocked;
       stageWrap.classList.remove("show-loss-image");
       lossImageBackdrop.classList.add("hidden");
       overlayCard.classList.remove("result-mode");
@@ -126,6 +136,7 @@
       document.getElementById("changeSetupButton").hidden = true;
     } else if (mode === "over") {
       customizer.hidden = true;
+      accessPanel.hidden = true;
       overlayCard.classList.add("result-mode");
       overlayKicker.textContent = "FLIGHT COMPLETE";
       overlayTitle.innerHTML = score > 0 ? `YOU SCORED<br><span style="color:var(--yellow)">${score}</span>` : "SO CLOSE!";
@@ -719,16 +730,24 @@
     img.src = avatarObjectUrl;
   }
 
-  function clearAvatar() {
-    avatarImage = null;
+  function clearAvatar(restoreDefault = true) {
     if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
     avatarObjectUrl = null;
-    customPhotoPreview.removeAttribute("src");
-    customPhotoPreview.classList.add("hidden");
-    previewBird.classList.remove("hidden");
+    avatarImage = restoreDefault ? defaultAvatarImage : null;
     avatarActions.hidden = true;
-    avatarUploadLabel.textContent = "Upload a face photo";
-    currentBirdLabel.textContent = skins[skinKey].name.toUpperCase();
+    if (avatarImage && defaultAvatarUrl) {
+      customPhotoPreview.src = defaultAvatarUrl;
+      customPhotoPreview.classList.remove("hidden");
+      previewBird.classList.add("hidden");
+      avatarUploadLabel.textContent = "Replace the creator's character";
+      currentBirdLabel.textContent = "CREATOR PHOTO";
+    } else {
+      customPhotoPreview.removeAttribute("src");
+      customPhotoPreview.classList.add("hidden");
+      previewBird.classList.remove("hidden");
+      avatarUploadLabel.textContent = "Upload a face photo";
+      currentBirdLabel.textContent = skins[skinKey].name.toUpperCase();
+    }
   }
 
   function loadAudioFile(file, kind) {
@@ -779,12 +798,145 @@
       .catch(error => console.warn(`Could not decode uploaded ${kind} sound; media playback fallback will be used.`, error));
   }
 
+  function setAccessMessage(message, isError = false) {
+    accessMessage.textContent = message;
+    accessMessage.classList.toggle("error", isError);
+  }
+
+  function setCustomizationAccess(unlocked) {
+    customizationUnlocked = Boolean(unlocked);
+    if (state === "ready") {
+      customizer.hidden = !customizationUnlocked;
+      accessPanel.hidden = customizationUnlocked;
+    }
+    if (customizationUnlocked) setAccessMessage("Customisation unlocked on this device.");
+  }
+
+  async function loadDefaultSound(kind, asset) {
+    if (!asset?.url) return;
+    const player = new Audio(asset.url);
+    player.preload = "auto";
+    if (kind === "flap") {
+      flapAudio = player;
+      selectedFlapPack = "uploaded";
+      const option = memeSoundSelect.querySelector('option[value="uploaded"]');
+      if (option) option.disabled = false;
+      memeSoundSelect.value = "uploaded";
+      soundUploadLabel.textContent = `Creator sound: ${asset.name || "default flap"}`;
+    } else {
+      hitAudio = player;
+      selectedHitPack = "uploaded";
+      const option = lossSoundSelect.querySelector('option[value="uploaded"]');
+      if (option) option.disabled = false;
+      lossSoundSelect.value = "uploaded";
+      lossSoundUploadLabel.textContent = `Creator sound: ${asset.name || "default collision"}`;
+    }
+    try {
+      const response = await fetch(asset.url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Could not fetch default ${kind} sound.`);
+      const bytes = await response.arrayBuffer();
+      const audio = ensureAudioContext();
+      if (!audio) return;
+      const buffer = await audio.decodeAudioData(bytes.slice(0));
+      if (kind === "flap" && flapAudio === player) flapAudioBuffer = buffer;
+      if (kind === "hit" && hitAudio === player) hitAudioBuffer = buffer;
+    } catch (error) {
+      console.warn(`Could not decode creator ${kind} sound; audio-element playback will be used.`, error);
+    }
+  }
+
+  async function loadCreatorSettings() {
+    try {
+      const response = await fetch("/api/public/settings", { cache: "no-store" });
+      if (!response.ok) throw new Error("The creator settings could not be loaded.");
+      const data = await response.json();
+      defaultAssets = data.assets || {};
+      if (Number.isFinite(Number(data.game_over_opacity))) {
+        lossOpacity.value = String(data.game_over_opacity);
+        lossOpacityValue.textContent = `${data.game_over_opacity}%`;
+        lossImageBackdrop.style.opacity = String(Number(data.game_over_opacity) / 100);
+      }
+
+      const character = defaultAssets.character;
+      if (character?.url) {
+        defaultAvatarUrl = character.url;
+        const image = new Image();
+        image.onload = () => {
+          defaultAvatarImage = image;
+          if (!avatarObjectUrl) {
+            avatarImage = image;
+            customPhotoPreview.src = character.url;
+            customPhotoPreview.classList.remove("hidden");
+            previewBird.classList.add("hidden");
+            currentBirdLabel.textContent = "CREATOR PHOTO";
+          }
+        };
+        image.onerror = () => console.warn("Creator character image could not be loaded.");
+        image.src = character.url;
+      }
+
+      if (defaultAssets.game_over_image?.url) {
+        defaultGameOverImageUrl = defaultAssets.game_over_image.url;
+        lossImageUrl = defaultGameOverImageUrl;
+        lossImageBackdrop.style.opacity = String(Number(lossOpacity.value) / 100);
+      }
+      await Promise.all([
+        loadDefaultSound("flap", defaultAssets.flap_sound),
+        loadDefaultSound("hit", defaultAssets.collision_sound)
+      ]);
+    } catch (error) {
+      console.warn("Sky Hop could not load its creator defaults.", error);
+      setAccessMessage("Creator settings could not load. Refresh and try again.", true);
+    }
+  }
+
+  async function checkSavedCustomizationAccess() {
+    let token = null;
+    try { token = localStorage.getItem("skyhop-custom-access"); } catch { /* Storage may be disabled. */ }
+    if (!token) return;
+    try {
+      const response = await fetch("/api/custom-access/verify", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error("Expired access token.");
+      setCustomizationAccess(true);
+    } catch {
+      try { localStorage.removeItem("skyhop-custom-access"); } catch { /* Ignore storage errors. */ }
+    }
+  }
+
+  accessUnlockForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const key = accessKeyInput.value.trim();
+    if (!key) return;
+    const button = accessUnlockForm.querySelector("button[type=submit]");
+    button.disabled = true;
+    setAccessMessage("Checking key…");
+    try {
+      const response = await fetch("/api/custom-access/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "That key is not valid.");
+      try { localStorage.setItem("skyhop-custom-access", data.access_token); } catch { /* Session still works until refresh. */ }
+      accessKeyInput.value = "";
+      setCustomizationAccess(true);
+    } catch (error) {
+      setAccessMessage(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   avatarInput.addEventListener("change", () => setAvatarFile(avatarInput.files[0]));
   removeAvatarButton.addEventListener("click", clearAvatar);
   presetRow.querySelectorAll(".preset-chip").forEach(button => {
     button.addEventListener("click", () => {
       skinKey = button.dataset.skin;
-      clearAvatar();
+      clearAvatar(false);
       presetRow.querySelectorAll(".preset-chip").forEach(b => b.classList.toggle("active", b === button));
       previewBird.style.color = skins[skinKey].body;
       currentBirdLabel.textContent = skins[skinKey].name.toUpperCase();
@@ -845,12 +997,12 @@
   });
   removeLossImageButton.addEventListener("click", () => {
     if (lossImageUrl) URL.revokeObjectURL(lossImageUrl);
-    lossImageUrl = null;
+    lossImageUrl = defaultGameOverImageUrl;
     stageWrap.classList.remove("show-loss-image");
     lossImageBackdrop.classList.add("hidden");
     lossImageBackdrop.removeAttribute("src");
     lossImageActions.hidden = true;
-    lossImageUploadLabel.textContent = "Upload a game-over meme image";
+    lossImageUploadLabel.textContent = defaultGameOverImageUrl ? "Creator's game-over image is active" : "Upload a game-over meme image";
     lossImageInput.value = "";
   });
   lossOpacity.addEventListener("input", () => {
@@ -866,5 +1018,7 @@
   updateHud();
   setOverlay("ready");
   updateSoundButton();
+  loadCreatorSettings();
+  checkSavedCustomizationAccess();
   requestAnimationFrame(frame);
 })();

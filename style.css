@@ -161,3 +161,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--yellow); outlin
 /* The custom defeat image belongs to the game stage only. The score header is a sibling and never receives this layer. */
 .stage-wrap { position: relative; z-index: 0; overflow: hidden; isolation: isolate; }
 .game-toolbar { position: relative; z-index: 1; }
+
+/* Public customisation is locked until the server validates an owner-issued key. */
+.locked-setup { margin: 12px 0 16px; padding: 13px; border: 1px solid rgba(121,224,204,.22); border-radius: 12px; background: rgba(121,224,204,.055); text-align: left; }
+.locked-setup[hidden] { display: none !important; }
+.locked-setup > strong { color: var(--teal); font: 900 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
+.locked-setup > p { margin: 7px 0 11px; color: #9caebe; font-size: 10px; line-height: 1.5; }
+.locked-setup form { display: flex; gap: 7px; }
+.locked-setup input { width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; color: #f7f4ed; background: #101b2b; font-size: 11px; }
+.locked-setup button { flex: 0 0 auto; min-height: 38px; padding: 0 13px; border: 0; border-radius: 8px; color: #12283a; background: var(--teal); font: 900 9px ui-monospace, monospace; cursor: pointer; }
+.locked-setup small { display:block; min-height:14px; margin-top:7px; color:var(--teal); font-size:9px; }
+.locked-setup small.error { color:#ff9c8e; }

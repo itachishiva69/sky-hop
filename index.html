@@ -150,6 +150,16 @@
               <p class="privacy-note">Your photos and uploaded audio stay in this browser. They are not sent to the game server.</p>
             </div>
 
+            <section class="locked-setup" id="accessPanel" aria-label="Unlock customisation">
+              <strong>CREATOR SETUP ACTIVE</strong>
+              <p>You're playing with the creator's selected character and sounds. Enter an access key to customise your own game on this device.</p>
+              <form id="accessUnlockForm">
+                <input id="accessKeyInput" type="password" autocomplete="off" placeholder="Enter customisation key" maxlength="200" aria-label="Customisation key" required>
+                <button type="submit">UNLOCK</button>
+              </form>
+              <small id="accessMessage" aria-live="polite"></small>
+            </section>
+
             <button class="primary-button" id="startButton" type="button">LET'S FLY <span>↗</span></button>
             <button class="secondary-button" id="changeSetupButton" type="button" hidden>CHANGE CHARACTER / SOUND</button>
             <div class="control-hint"><kbd>SPACE</kbd><span>or</span><kbd>CLICK / TAP</kbd></div>
@@ -166,7 +176,7 @@
 
     <footer class="footer">
       <p>BUILT FOR THE JOY OF ONE MORE TRY.</p>
-      <p class="footer-right">NO BIRDS WERE BONKED IN THE MAKING OF THIS GAME <span>♥</span></p>
+      <p class="footer-right">NO BIRDS WERE BONKED IN THE MAKING OF THIS GAME <span>♥</span> · <a href="/admin" style="color:inherit;text-decoration:none">ADMIN</a></p>
     </footer>
   </main>
   <script src="game.js"></script>
