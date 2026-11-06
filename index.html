@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101b2b">
+  <meta name="description" content="Upload your friends as birds, pick meme sounds, and flap through the sky in Sky Hop.">
+  <title>Sky Hop — meme bird chaos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Sky Hop home">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span>SKY HOP<span class="brand-period">.</span></span>
+      </a>
+      <div class="top-actions">
+        <button class="icon-button" id="soundButton" type="button" aria-label="Turn sound off" title="Toggle sound">
+          <svg id="soundIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6l-5 4H4Z"/><path d="M16 9a5 5 0 0 1 0 6M18.5 6.5a9 9 0 0 1 0 11"/></svg>
+        </button>
+        <a class="source-link" href="https://render.com" target="_blank" rel="noreferrer">MADE TO FLY <span>↗</span></a>
+      </div>
+    </header>
+
+    <section class="intro" id="top" aria-labelledby="pageTitle">
+      <p class="eyebrow"><span class="eyebrow-dot"></span> ONE MORE TRY?</p>
+      <h1 id="pageTitle">A little bird.<br><span>Big sky energy.</span></h1>
+      <p class="intro-copy">Tap to flap. Dodge the gates. Try not to become bird toast.</p>
+    </section>
+
+    <section class="game-section" aria-label="Sky Hop game">
+      <div class="game-toolbar">
+        <div class="score-card"><span class="stat-label">SCORE</span><strong id="scoreValue">00</strong></div>
+        <div class="bird-picker" aria-label="Current bird">
+          <span class="stat-label picker-label">YOUR BIRD</span>
+          <strong class="current-bird-label" id="currentBirdLabel">PIP</strong>
+        </div>
+        <div class="best-card"><span class="stat-label">BEST</span><strong id="bestValue">00</strong></div>
+      </div>
+
+      <div class="stage-wrap">
+        <canvas id="gameCanvas" width="480" height="720" aria-label="Sky Hop game canvas. Tap or press space to flap."></canvas>
+        <img class="loss-image-backdrop hidden" id="lossImageBackdrop" alt="" aria-hidden="true">
+        <div class="game-overlay" id="gameOverlay">
+          <div class="overlay-card" id="overlayCard">
+            <div class="overlay-kicker" id="overlayKicker">WELCOME TO THE SKY</div>
+            <div class="mascot-preview" aria-hidden="true">
+              <span class="preview-spark spark-one">✦</span>
+              <span class="preview-bird" id="previewBird">●</span>
+              <img class="preview-photo hidden" id="customPhotoPreview" alt="Your uploaded bird character preview">
+              <span class="preview-spark spark-two">✧</span>
+            </div>
+            <h2 id="overlayTitle">Ready,<br>little bird?</h2>
+            <p id="overlayText">Turn your friend into the bird. Pick a meme sound. Cause problems.</p>
+
+            <div class="customizer" id="customizer">
+              <div class="custom-section">
+                <div class="custom-section-heading">
+                  <span class="custom-step">01</span>
+                  <div><strong>WHO'S FLYING?</strong><small>Use a friend's face as the bird</small></div>
+                </div>
+                <label class="upload-control" for="avatarInput">
+                  <span class="upload-icon">＋</span>
+                  <span><strong id="avatarUploadLabel">Upload a face photo</strong><small>JPG, PNG or WEBP · stays on this device</small></span>
+                  <span class="upload-arrow">↗</span>
+                </label>
+                <input class="visually-hidden" id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+                <div class="avatar-actions" id="avatarActions" hidden>
+                  <span class="selected-file" id="avatarFileName">Friend's face loaded</span>
+                  <button class="text-button" id="removeAvatarButton" type="button">Remove photo</button>
+                </div>
+                <div class="preset-row" id="presetRow">
+                  <button class="preset-chip active" type="button" data-skin="pip"><i class="preset-dot pip-dot"></i> Pip</button>
+                  <button class="preset-chip" type="button" data-skin="berry"><i class="preset-dot berry-dot"></i> Berry</button>
+                  <button class="preset-chip" type="button" data-skin="sunny"><i class="preset-dot sunny-dot"></i> Sunny</button>
+                </div>
+              </div>
+
+              <div class="custom-divider"></div>
+
+              <div class="custom-section">
+                <div class="custom-section-heading">
+                  <span class="custom-step">02</span>
+                  <div><strong>CHOOSE THE CHAOS</strong><small>Same custom sound plays on tap, Space and Up Arrow</small></div>
+                </div>
+                <label class="field-label" for="memeSoundSelect">TAP / SPACE / ARROW KEY FLAP SOUND</label>
+                <select id="memeSoundSelect" class="sound-select">
+                  <option value="random">🎲 Random meme chaos</option>
+                  <option value="vine">💥 Vine-boom style</option>
+                  <option value="bruh">🗿 Bruh bass</option>
+                  <option value="bonk">🔨 Bonk</option>
+                  <option value="goofy">🤡 Goofy whistle</option>
+                  <option value="airhorn">📢 Airhorn</option>
+                  <option value="uploaded" disabled>🎵 My uploaded sound</option>
+                </select>
+                <label class="upload-control sound-upload" for="soundInput">
+                  <span class="upload-icon">♫</span>
+                  <span><strong id="soundUploadLabel">Upload your own flap sound</strong><small>MP3, WAV, OGG or M4A</small></span>
+                  <span class="upload-arrow">↗</span>
+                </label>
+                <input class="visually-hidden" id="soundInput" type="file" accept="audio/*">
+                <div class="avatar-actions" id="soundActions" hidden>
+                  <span class="selected-file" id="soundFileName">Custom sound loaded</span>
+                  <button class="text-button" id="removeSoundButton" type="button">Remove</button>
+                </div>
+              </div>
+              <div class="custom-divider"></div>
+
+              <div class="custom-section">
+                <div class="custom-section-heading">
+                  <span class="custom-step">03</span>
+                  <div><strong>WHEN YOU GET BONKED</strong><small>One shared sound plays for obstacle and ground collisions</small></div>
+                </div>
+                <label class="upload-control" for="lossImageInput">
+                  <span class="upload-icon">☠</span>
+                  <span><strong id="lossImageUploadLabel">Upload a game-over meme image</strong><small>JPG, PNG, WEBP or GIF · local only</small></span>
+                  <span class="upload-arrow">↗</span>
+                </label>
+                <input class="visually-hidden" id="lossImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+                <div class="avatar-actions" id="lossImageActions" hidden>
+                  <span class="selected-file" id="lossImageFileName">Game-over image loaded</span>
+                  <button class="text-button" id="removeLossImageButton" type="button">Remove</button>
+                </div>
+                <label class="field-label" for="lossOpacity">IMAGE TRANSPARENCY <span id="lossOpacityValue">65%</span></label>
+                <input id="lossOpacity" class="opacity-slider" type="range" min="10" max="100" value="65">
+                <label class="field-label" for="lossSoundSelect">OBSTACLE + GROUND COLLISION SOUND</label>
+                <select id="lossSoundSelect" class="sound-select">
+                  <option value="random">🎲 Random hit sound</option>
+                  <option value="vine">💥 Vine boom</option>
+                  <option value="bruh">🗿 Bruh bass</option>
+                  <option value="bonk">🔨 Bonk</option>
+                  <option value="sad">🎺 Sad trombone</option>
+                  <option value="goofy">🤡 Goofy whistle</option>
+                  <option value="selected">Use selected flap sound</option>
+                  <option value="uploaded" disabled>🎵 My uploaded hit sound</option>
+                  <option value="none">No hit sound</option>
+                </select>
+                <label class="upload-control sound-upload" for="lossSoundInput">
+                  <span class="upload-icon">♫</span>
+                  <span><strong id="lossSoundUploadLabel">Upload your obstacle / ground sound</strong><small>MP3, WAV, OGG or M4A</small></span>
+                  <span class="upload-arrow">↗</span>
+                </label>
+                <input class="visually-hidden" id="lossSoundInput" type="file" accept="audio/*">
+                <div class="avatar-actions" id="lossSoundActions" hidden>
+                  <span class="selected-file" id="lossSoundFileName">Custom hit sound loaded</span>
+                  <button class="text-button" id="removeLossSoundButton" type="button">Remove</button>
+                </div>
+              </div>
+              <p class="privacy-note">Your photos and uploaded audio stay in this browser. They are not sent to the game server.</p>
+            </div>
+
+            <button class="primary-button" id="startButton" type="button">LET'S FLY <span>↗</span></button>
+            <button class="secondary-button" id="changeSetupButton" type="button" hidden>CHANGE CHARACTER / SOUND</button>
+            <div class="control-hint"><kbd>SPACE</kbd><span>or</span><kbd>CLICK / TAP</kbd></div>
+          </div>
+        </div>
+        <div class="game-pause-note" id="pauseNote" aria-live="polite">PAUSED · PRESS SPACE TO RESUME</div>
+      </div>
+      <div class="below-game">
+        <span><i class="tiny-dot teal"></i> TAP ANYWHERE TO FLAP</span>
+        <span><i class="tiny-dot coral"></i> AVOID THE PIPES</span>
+        <span><i class="tiny-dot yellow"></i> CHASE YOUR BEST</span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>BUILT FOR THE JOY OF ONE MORE TRY.</p>
+      <p class="footer-right">NO BIRDS WERE BONKED IN THE MAKING OF THIS GAME <span>♥</span></p>
+    </footer>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
