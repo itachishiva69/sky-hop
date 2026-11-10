@@ -15,42 +15,14 @@
   const soundButton = document.getElementById("soundButton");
   const soundIcon = document.getElementById("soundIcon");
   const pauseNote = document.getElementById("pauseNote");
-  const birdOptions = [...document.querySelectorAll(".bird-option")];
-  const customizer = document.getElementById("customizer");
-  const avatarInput = document.getElementById("avatarInput");
-  const avatarUploadLabel = document.getElementById("avatarUploadLabel");
-  const avatarActions = document.getElementById("avatarActions");
-  const avatarFileName = document.getElementById("avatarFileName");
-  const removeAvatarButton = document.getElementById("removeAvatarButton");
-  const presetRow = document.getElementById("presetRow");
   const previewBird = document.getElementById("previewBird");
   const customPhotoPreview = document.getElementById("customPhotoPreview");
   const currentBirdLabel = document.getElementById("currentBirdLabel");
-  const memeSoundSelect = document.getElementById("memeSoundSelect");
-  const soundInput = document.getElementById("soundInput");
-  const soundUploadLabel = document.getElementById("soundUploadLabel");
-  const soundActions = document.getElementById("soundActions");
-  const soundFileName = document.getElementById("soundFileName");
-  const removeSoundButton = document.getElementById("removeSoundButton");
-  const lossImageInput = document.getElementById("lossImageInput");
-  const lossImageUploadLabel = document.getElementById("lossImageUploadLabel");
-  const lossImageActions = document.getElementById("lossImageActions");
-  const lossImageFileName = document.getElementById("lossImageFileName");
-  const removeLossImageButton = document.getElementById("removeLossImageButton");
   const lossImageBackdrop = document.getElementById("lossImageBackdrop");
-  const lossOpacity = document.getElementById("lossOpacity");
-  const lossOpacityValue = document.getElementById("lossOpacityValue");
-  const lossSoundSelect = document.getElementById("lossSoundSelect");
-  const lossSoundInput = document.getElementById("lossSoundInput");
-  const lossSoundUploadLabel = document.getElementById("lossSoundUploadLabel");
-  const lossSoundActions = document.getElementById("lossSoundActions");
-  const lossSoundFileName = document.getElementById("lossSoundFileName");
-  const removeLossSoundButton = document.getElementById("removeLossSoundButton");
 
+  let defaultAssets = {};
   let avatarImage = null;
-  let avatarObjectUrl = null;
-  let flapAudioUrl = null;
-  let hitAudioUrl = null;
+  let gameOverOpacity = 65;
   let flapAudio = null;
   let hitAudio = null;
   let flapAudioBuffer = null;
@@ -66,17 +38,10 @@
   const FLOOR = 654;
   const GRAVITY = 1500;
   const FLAP_VELOCITY = -440;
-  const CHARACTER_RADIUS = 31;
+  const CHARACTER_RADIUS = 44;
   const PIPE_WIDTH = 76;
   const PIPE_GAP = 190;
   const PIPE_SPEED = 178;
-  const skins = {
-    pip:   { body: "#79e0cc", wing: "#42bcae", belly: "#d9fff1", crest: "#ff8d79", name: "Pip" },
-    berry: { body: "#ff9db2", wing: "#df6e91", belly: "#ffe5e9", crest: "#ffd56f", name: "Berry" },
-    sunny: { body: "#ffd56f", wing: "#f2ac45", belly: "#fff4cf", crest: "#ff8d79", name: "Sunny" }
-  };
-
-  let skinKey = "pip";
   let state = "ready";
   let bird;
   let pipes = [];
@@ -115,7 +80,6 @@
     overlay.classList.remove("hidden");
     if (mode === "ready") {
       clearResultRevealTimer();
-      customizer.hidden = false;
       stageWrap.classList.remove("show-loss-image");
       lossImageBackdrop.classList.add("hidden");
       overlayCard.classList.remove("result-mode");
@@ -123,15 +87,12 @@
       overlayTitle.innerHTML = "Ready,<br>little bird?";
       overlayText.textContent = "Find your wings and slip through the gaps.";
       startButton.innerHTML = "LET'S FLY <span>↗</span>";
-      document.getElementById("changeSetupButton").hidden = true;
     } else if (mode === "over") {
-      customizer.hidden = true;
       overlayCard.classList.add("result-mode");
       overlayKicker.textContent = "FLIGHT COMPLETE";
       overlayTitle.innerHTML = score > 0 ? `YOU SCORED<br><span style="color:var(--yellow)">${score}</span>` : "SO CLOSE!";
       overlayText.textContent = score > 0 ? "Not bad, sky traveller. Fancy another go?" : "The pipes won this round. Give it another shot.";
       startButton.innerHTML = "TRY AGAIN <span>↗</span>";
-      document.getElementById("changeSetupButton").hidden = false;
     }
   }
 
@@ -372,7 +333,7 @@
     if (lossImageUrl) {
       // Show the uploaded image by itself first. The result card appears after 8 seconds.
       lossImageBackdrop.src = lossImageUrl;
-      lossImageBackdrop.style.opacity = String(Number(lossOpacity.value) / 100);
+      lossImageBackdrop.style.opacity = String(gameOverOpacity / 100);
       lossImageBackdrop.classList.remove("hidden");
       stageWrap.classList.add("show-loss-image");
       overlay.classList.add("hidden");
@@ -569,53 +530,31 @@
     ctx.rotate(bird.rotation || 0);
 
     if (avatarImage) {
-      const size = CHARACTER_RADIUS * 2;
+      // Use the uploaded cutout exactly as supplied. Preserve its aspect ratio and alpha channel.
+      // No circular mask, cropping, border, or automatic background removal is applied.
+      const naturalWidth = avatarImage.naturalWidth || avatarImage.width || 1;
+      const naturalHeight = avatarImage.naturalHeight || avatarImage.height || 1;
+      const maxWidth = 88;
+      const maxHeight = 88;
+      const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight);
+      const drawWidth = naturalWidth * scale;
+      const drawHeight = naturalHeight * scale;
       ctx.save();
-      ctx.shadowColor = "rgba(16, 37, 52, .28)";
-      ctx.shadowBlur = 13;
-      ctx.shadowOffsetY = 5;
-      ctx.beginPath();
-      ctx.arc(0, 0, CHARACTER_RADIUS, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(avatarImage, -CHARACTER_RADIUS, -CHARACTER_RADIUS, size, size);
+      ctx.shadowColor = "rgba(16, 37, 52, .24)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.drawImage(avatarImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
-      ctx.lineWidth = 5;
-      ctx.strokeStyle = "#fff8e8";
-      ctx.beginPath();
-      ctx.arc(0, 0, CHARACTER_RADIUS - 1, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(25, 51, 72, .3)";
-      ctx.beginPath();
-      ctx.arc(0, 0, CHARACTER_RADIUS + 2, 0, Math.PI * 2);
-      ctx.stroke();
       ctx.restore();
       return;
     }
 
-    const skin = skins[skinKey];
-    ctx.scale(1.32, 1.32);
-    // Tail feathers.
-    ctx.fillStyle = skin.wing;
-    ctx.beginPath(); ctx.moveTo(-17, 2); ctx.lineTo(-29, -5); ctx.lineTo(-26, 7); ctx.closePath(); ctx.fill();
-    // Main body.
-    ctx.fillStyle = skin.body;
-    ctx.beginPath(); ctx.ellipse(0, 0, 21, 17, -.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = skin.belly;
-    ctx.beginPath(); ctx.ellipse(4, 7, 11, 7, .2, 0, Math.PI * 2); ctx.fill();
-    // Wing.
-    ctx.save(); ctx.translate(-5, 3); ctx.rotate(bird.wing || 0);
-    ctx.fillStyle = skin.wing;
-    ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, -.36, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    // Crest feathers.
-    ctx.fillStyle = skin.crest;
-    ctx.beginPath(); ctx.moveTo(-7, -13); ctx.quadraticCurveTo(-12, -26, -3, -21); ctx.quadraticCurveTo(0, -29, 4, -17); ctx.quadraticCurveTo(11, -24, 10, -12); ctx.closePath(); ctx.fill();
-    // Eye and beak.
-    ctx.fillStyle = "#193348"; ctx.beginPath(); ctx.arc(10, -5, 3.1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fffdf0"; ctx.beginPath(); ctx.arc(11, -6, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ff986f"; ctx.beginPath(); ctx.moveTo(17, -1); ctx.lineTo(29, 3); ctx.lineTo(17, 7); ctx.closePath(); ctx.fill();
+    // Fallback only: use a bird emoji instead of the old circular cartoon body.
+    // Once an admin uploads a friend cutout, that image replaces this placeholder.
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '68px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    ctx.fillText("🐤", 0, 1);
     ctx.restore();
   }
 
@@ -662,11 +601,6 @@
   }
 
   startButton.addEventListener("click", startGame);
-  document.getElementById("changeSetupButton").addEventListener("click", () => {
-    setOverlay("ready");
-    stageWrap.classList.remove("show-loss-image");
-    lossImageBackdrop.classList.add("hidden");
-  });
   canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     handleAction();
@@ -699,172 +633,76 @@
     }
   });
 
-  function setAvatarFile(file) {
-    if (!file) return;
-    if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
-    avatarObjectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      avatarImage = img;
-      previewBird.classList.add("hidden");
-      customPhotoPreview.src = avatarObjectUrl;
-      customPhotoPreview.classList.remove("hidden");
-      avatarActions.hidden = false;
-      avatarFileName.textContent = file.name;
-      avatarUploadLabel.textContent = "Change your friend's photo";
-      presetRow.querySelectorAll(".preset-chip").forEach(b => b.classList.remove("active"));
-      currentBirdLabel.textContent = "CUSTOM PHOTO";
-    };
-    img.onerror = () => alert("That image could not be loaded. Try a JPG or PNG.");
-    img.src = avatarObjectUrl;
-  }
-
-  function clearAvatar() {
-    avatarImage = null;
-    if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
-    avatarObjectUrl = null;
-    customPhotoPreview.removeAttribute("src");
-    customPhotoPreview.classList.add("hidden");
-    previewBird.classList.remove("hidden");
-    avatarActions.hidden = true;
-    avatarUploadLabel.textContent = "Upload a face photo";
-    currentBirdLabel.textContent = skins[skinKey].name.toUpperCase();
-  }
-
-  function loadAudioFile(file, kind) {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
+  async function loadDefaultSound(kind, asset) {
+    if (!asset?.url) return;
+    const player = new Audio(asset.url);
+    player.preload = "auto";
     if (kind === "flap") {
-      if (flapAudioUrl) URL.revokeObjectURL(flapAudioUrl);
-      flapAudioUrl = url;
-      flapAudioBuffer = null;
-      flapAudio = new Audio(url);
-      flapAudio.preload = "auto";
-      flapAudio.load();
+      flapAudio = player;
       selectedFlapPack = "uploaded";
-      memeSoundSelect.querySelector('option[value="uploaded"]').disabled = false;
-      memeSoundSelect.value = "uploaded";
-      soundActions.hidden = false;
-      soundFileName.textContent = file.name;
-      soundUploadLabel.textContent = "Change your flap sound";
     } else {
-      if (hitAudioUrl) URL.revokeObjectURL(hitAudioUrl);
-      hitAudioUrl = url;
-      hitAudioBuffer = null;
-      hitAudio = new Audio(url);
-      hitAudio.preload = "auto";
-      hitAudio.load();
+      hitAudio = player;
       selectedHitPack = "uploaded";
-      const uploadedHitOption = lossSoundSelect.querySelector('option[value="uploaded"]');
-      if (uploadedHitOption) uploadedHitOption.disabled = false;
-      lossSoundSelect.value = "uploaded";
-      lossSoundActions.hidden = false;
-      lossSoundFileName.textContent = file.name;
-      lossSoundUploadLabel.textContent = "Change your hit sound";
     }
-
-    // Decode the local file once and replay it through the active AudioContext on demand.
-    const selectedUrl = url;
-    file.arrayBuffer()
-      .then(data => {
-        const audio = ensureAudioContext();
-        if (!audio) return null;
-        return audio.decodeAudioData(data.slice(0));
-      })
-      .then(buffer => {
-        if (!buffer) return;
-        if (kind === "flap" && flapAudioUrl === selectedUrl) flapAudioBuffer = buffer;
-        if (kind === "hit" && hitAudioUrl === selectedUrl) hitAudioBuffer = buffer;
-      })
-      .catch(error => console.warn(`Could not decode uploaded ${kind} sound; media playback fallback will be used.`, error));
+    try {
+      const response = await fetch(asset.url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Could not fetch default ${kind} sound.`);
+      const bytes = await response.arrayBuffer();
+      const audio = ensureAudioContext();
+      if (!audio) return;
+      const buffer = await audio.decodeAudioData(bytes.slice(0));
+      if (kind === "flap" && flapAudio === player) flapAudioBuffer = buffer;
+      if (kind === "hit" && hitAudio === player) hitAudioBuffer = buffer;
+    } catch (error) {
+      console.warn(`Could not decode creator ${kind} sound; audio-element playback will be used.`, error);
+    }
   }
 
-  avatarInput.addEventListener("change", () => setAvatarFile(avatarInput.files[0]));
-  removeAvatarButton.addEventListener("click", clearAvatar);
-  presetRow.querySelectorAll(".preset-chip").forEach(button => {
-    button.addEventListener("click", () => {
-      skinKey = button.dataset.skin;
-      clearAvatar();
-      presetRow.querySelectorAll(".preset-chip").forEach(b => b.classList.toggle("active", b === button));
-      previewBird.style.color = skins[skinKey].body;
-      currentBirdLabel.textContent = skins[skinKey].name.toUpperCase();
-    });
-  });
+  async function loadCreatorSettings() {
+    try {
+      const response = await fetch("/api/public/settings", { cache: "no-store" });
+      if (!response.ok) throw new Error("The creator settings could not be loaded.");
+      const data = await response.json();
+      defaultAssets = data.assets || {};
+      gameOverOpacity = Number.isFinite(Number(data.game_over_opacity))
+        ? Number(data.game_over_opacity)
+        : 65;
+      lossImageBackdrop.style.opacity = String(gameOverOpacity / 100);
 
-  memeSoundSelect.addEventListener("change", () => {
-    selectedFlapPack = memeSoundSelect.value;
-    if (selectedFlapPack !== "uploaded") {
-      if (flapAudioUrl) URL.revokeObjectURL(flapAudioUrl);
-      flapAudioUrl = null; flapAudio = null; flapAudioBuffer = null;
-      memeSoundSelect.querySelector('option[value="uploaded"]').disabled = true;
-      soundActions.hidden = true;
-      soundUploadLabel.textContent = "Upload your own meme sound";
-    }
-  });
-  soundInput.addEventListener("change", () => loadAudioFile(soundInput.files[0], "flap"));
-  removeSoundButton.addEventListener("click", () => {
-    if (flapAudioUrl) URL.revokeObjectURL(flapAudioUrl);
-    flapAudioUrl = null; flapAudio = null; flapAudioBuffer = null;
-    memeSoundSelect.querySelector('option[value="uploaded"]').disabled = true;
-    selectedFlapPack = "random"; memeSoundSelect.value = "random";
-    soundActions.hidden = true; soundUploadLabel.textContent = "Upload your own meme sound";
-    soundInput.value = "";
-  });
-  lossSoundSelect.addEventListener("change", () => {
-    selectedHitPack = lossSoundSelect.value;
-    if (selectedHitPack !== "uploaded") {
-      if (hitAudioUrl) URL.revokeObjectURL(hitAudioUrl);
-      hitAudioUrl = null; hitAudio = null; hitAudioBuffer = null;
-      const uploadedHitOption = lossSoundSelect.querySelector('option[value="uploaded"]');
-      if (uploadedHitOption) uploadedHitOption.disabled = true;
-      lossSoundActions.hidden = true;
-      lossSoundUploadLabel.textContent = "Upload a separate hit sound";
-    }
-  });
-  lossSoundInput.addEventListener("change", () => loadAudioFile(lossSoundInput.files[0], "hit"));
-  removeLossSoundButton.addEventListener("click", () => {
-    if (hitAudioUrl) URL.revokeObjectURL(hitAudioUrl);
-    hitAudioUrl = null; hitAudio = null; hitAudioBuffer = null;
-    const uploadedHitOption = lossSoundSelect.querySelector('option[value="uploaded"]');
-    if (uploadedHitOption) uploadedHitOption.disabled = true;
-    lossSoundActions.hidden = true;
-    lossSoundUploadLabel.textContent = "Upload a separate hit sound";
-    lossSoundInput.value = "";
-    selectedHitPack = "random";
-    lossSoundSelect.value = "random";
-  });
+      const character = defaultAssets.character;
+      if (character?.url) {
+        const image = new Image();
+        image.onload = () => {
+          avatarImage = image;
+          customPhotoPreview.src = character.url;
+          customPhotoPreview.classList.remove("hidden");
+          previewBird.classList.add("hidden");
+          currentBirdLabel.textContent = "YOUR FRIEND";
+        };
+        image.onerror = () => console.warn("Creator character image could not be loaded.");
+        image.src = character.url;
+      } else {
+        currentBirdLabel.textContent = "PIP";
+      }
 
-  lossImageInput.addEventListener("change", () => {
-    const file = lossImageInput.files[0];
-    if (!file) return;
-    if (lossImageUrl) URL.revokeObjectURL(lossImageUrl);
-    lossImageUrl = URL.createObjectURL(file);
-    lossImageUploadLabel.textContent = "Change game-over image";
-    lossImageActions.hidden = false;
-    lossImageFileName.textContent = file.name;
-  });
-  removeLossImageButton.addEventListener("click", () => {
-    if (lossImageUrl) URL.revokeObjectURL(lossImageUrl);
-    lossImageUrl = null;
-    stageWrap.classList.remove("show-loss-image");
-    lossImageBackdrop.classList.add("hidden");
-    lossImageBackdrop.removeAttribute("src");
-    lossImageActions.hidden = true;
-    lossImageUploadLabel.textContent = "Upload a game-over meme image";
-    lossImageInput.value = "";
-  });
-  lossOpacity.addEventListener("input", () => {
-    lossOpacityValue.textContent = `${lossOpacity.value}%`;
-    lossImageBackdrop.style.opacity = String(Number(lossOpacity.value) / 100);
-  });
+      if (defaultAssets.game_over_image?.url) {
+        lossImageUrl = defaultAssets.game_over_image.url;
+      }
+      await Promise.all([
+        loadDefaultSound("flap", defaultAssets.flap_sound),
+        loadDefaultSound("hit", defaultAssets.collision_sound)
+      ]);
+    } catch (error) {
+      console.warn("Sky Hop could not load its creator defaults.", error);
+    }
+  }
 
   // Initialize the canvas and the first idle animation.
   resetGame();
   state = "ready";
-  selectedFlapPack = memeSoundSelect.value;
-  selectedHitPack = lossSoundSelect.value;
   updateHud();
   setOverlay("ready");
   updateSoundButton();
+  loadCreatorSettings();
   requestAnimationFrame(frame);
 })();

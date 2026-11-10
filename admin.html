@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101b2b">
+  <title>Sky Hop · Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-shell { width:min(900px,calc(100% - 32px)); margin:0 auto; padding:30px 0 60px; }
+    .admin-head { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; }
+    .admin-head h1 { font-size:clamp(30px,5vw,44px); }
+    .admin-head p { margin:8px 0 0; color:var(--muted); font-size:13px; }
+    .admin-panel { padding:22px; border:1px solid var(--line); border-radius:16px; background:rgba(23,38,58,.88); box-shadow:0 18px 50px rgba(0,0,0,.18); }
+    .admin-panel h2 { margin:0 0 8px; font-size:20px; }
+    .admin-panel > p { color:var(--muted); font-size:12px; line-height:1.55; }
+    .admin-login { max-width:420px; margin:8vh auto 0; }
+    .admin-form { display:grid; gap:12px; margin-top:18px; }
+    .admin-form label { display:grid; gap:6px; color:#aab8c8; font:9px ui-monospace,monospace; letter-spacing:.12em; }
+    .admin-button { min-height:40px; padding:0 14px; border:0; border-radius:9px; background:var(--teal); color:#12283a; font:900 10px ui-monospace,monospace; letter-spacing:.08em; cursor:pointer; }
+    .admin-button.secondary { border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05); color:#e9f1f5; }
+    .admin-button.danger { border:1px solid rgba(255,141,121,.4); background:rgba(255,141,121,.08); color:#ffac9e; }
+    .admin-button:disabled { opacity:.55; cursor:wait; }
+    .admin-status { min-height:18px; margin:10px 0 0; color:var(--teal); font-size:12px; }
+    .admin-status.error { color:#ff9c8e; }
+    .admin-assets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
+    .asset-card { min-width:0; padding:16px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.035); }
+    .asset-card h3 { margin:0 0 5px; font-size:14px; }
+    .asset-card p { min-height:32px; margin:0 0 12px; color:var(--muted); font-size:11px; line-height:1.45; }
+    .asset-current { min-height:58px; display:flex; align-items:center; gap:10px; margin-bottom:12px; color:#9aabba; font-size:11px; overflow-wrap:anywhere; }
+    .asset-current img { width:84px; height:84px; object-fit:contain; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,.04); }
+    .asset-current audio { width:100%; max-width:260px; height:36px; }
+    .asset-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .file-picker { display:block; margin:0 0 10px; color:#aab8c8; font-size:11px; }
+    .admin-tools { display:flex; gap:8px; flex-wrap:wrap; }
+    .back-link { color:var(--teal); text-decoration:none; font:10px ui-monospace,monospace; }
+    @media (max-width:620px) { .admin-assets { grid-template-columns:1fr; } .admin-shell { padding-top:20px; } .admin-panel { padding:16px; } }
+  </style>
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-head">
+      <div>
+        <a class="brand" href="/" aria-label="Back to Sky Hop"><span class="brand-mark">✦</span><span>SKY HOP<span class="brand-period">.</span></span></a>
+        <h1>Admin settings</h1>
+        <p>You control the default images and sounds. Visitors can only play the game.</p>
+      </div>
+      <a class="back-link" href="/">← BACK TO GAME</a>
+    </header>
+
+    <section class="admin-panel admin-login" id="loginPanel">
+      <h2>Administrator login</h2>
+      <p>Sign in with the admin username and password configured for this deployment.</p>
+      <form class="admin-form" id="loginForm">
+        <label>USERNAME<input id="username" name="username" autocomplete="username" required></label>
+        <label>PASSWORD<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+        <button class="admin-button" type="submit">SIGN IN</button>
+      </form>
+      <p class="admin-status" id="loginStatus" aria-live="polite"></p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="admin-panel">
+        <div class="admin-tools" style="justify-content:space-between;align-items:center">
+          <div><h2>Default game assets</h2><p>Upload or replace these defaults. Every visitor receives the same setup.</p></div>
+          <button class="admin-button secondary" id="logoutButton" type="button">SIGN OUT</button>
+        </div>
+        <div class="admin-assets">
+          <article class="asset-card" data-kind="character">
+            <h3>Friend face cutout</h3><p>Upload a transparent PNG cutout. The game uses it as the bird exactly as supplied, without circular cropping or background removal.</p>
+            <div class="asset-current" data-current>No image selected.</div>
+            <input class="file-picker" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE IMAGE</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+          </article>
+          <article class="asset-card" data-kind="game_over_image">
+            <h3>Game-over image</h3><p>Displayed for eight seconds after a collision, before the score card.</p>
+            <div class="asset-current" data-current>No image selected.</div>
+            <input class="file-picker" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE IMAGE</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+          </article>
+          <article class="asset-card" data-kind="flap_sound">
+            <h3>Flap sound</h3><p>Played on tap, Space and Up Arrow.</p>
+            <div class="asset-current" data-current>No sound selected.</div>
+            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
+            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+          </article>
+          <article class="asset-card" data-kind="collision_sound">
+            <h3>Collision sound</h3><p>One sound for both obstacle and ground collisions.</p>
+            <div class="asset-current" data-current>No sound selected.</div>
+            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
+            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+          </article>
+        </div>
+        <p class="admin-status" id="assetStatus" aria-live="polite"></p>
+        <div class="asset-card" style="margin-top:14px">
+          <h3>Game-over image transparency</h3>
+          <p>Choose how transparent your game-over image appears during its eight-second display.</p>
+          <label class="field-label" for="adminOpacity">IMAGE OPACITY <strong id="adminOpacityValue">65%</strong></label>
+          <input id="adminOpacity" class="opacity-slider" type="range" min="10" max="100" value="65">
+          <button class="admin-button" id="saveOpacityButton" type="button" style="margin-top:10px">SAVE OPACITY</button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>

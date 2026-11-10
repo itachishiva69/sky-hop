@@ -1,0 +1,688 @@
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -42,16 +42,15 @@
+ MAX_IMAGE_BYTES = 8 * 1024 * 1024
+ MAX_AUDIO_BYTES = 20 * 1024 * 1024
++MAX_VIDEO_BYTES = 50 * 1024 * 1024
+ 
+ ASSET_RULES = {
+     "character": {"kind": "image", "extensions": {".png", ".jpg", ".jpeg", ".webp", ".gif"}, "max": MAX_IMAGE_BYTES},
+-    "game_over_image": {"kind": "image", "extensions": {".png", ".jpg", ".jpeg", ".webp", ".gif"}, "max": MAX_IMAGE_BYTES},
++    "game_over_video": {"kind": "video", "extensions": {".mp4", ".webm"}, "max": MAX_VIDEO_BYTES},
+     "flap_sound": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
+     "collision_sound": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
++    "pillar_sound_1": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
++    "pillar_sound_2": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
++    "pillar_sound_3": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
++    "pillar_sound_4": {"kind": "audio", "extensions": {".mp3", ".wav", ".ogg", ".m4a", ".aac"}, "max": MAX_AUDIO_BYTES},
+ }
+ 
+@@ -67,5 +66,5 @@
+ class AdminSettingsBody(BaseModel):
+     game_over_opacity: int
++    game_over_video_muted: bool = True
+ 
+ 
+@@ -184,8 +183,8 @@
+             ("game_over_opacity", "65"),
+         )
++        conn.execute(
++            "INSERT INTO app_settings(setting_key, setting_value) VALUES (%s, %s) ON CONFLICT(setting_key) DO NOTHING",
++            ("game_over_video_muted", "true"),
++        )
+         conn.execute("DELETE FROM admin_sessions WHERE expires_at < %s", (int(time.time()),))
+ 
+@@ -260,9 +259,9 @@
+             or (ext == ".gif" and data[:6] in {b"GIF87a", b"GIF89a"})
+         )
++    if kind == "video":
++        return (
++            (ext == ".mp4" and len(data) > 12 and data[4:8] == b"ftyp")
++            or (ext == ".webm" and data.startswith(b"\x1a\x45\xdf\xa3"))
++        )
+     return (
+         (ext == ".mp3" and (data.startswith(b"ID3") or (len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0)))
+@@ -309,19 +308,14 @@
+ def public_settings():
+     with db() as conn:
+-        row = conn.execute(
+-            "SELECT setting_value FROM app_settings WHERE setting_key = %s", ("game_over_opacity",)
+-        ).fetchone()
+-    opacity = int(row["setting_value"]) if row else 65
+-    return {"assets": public_asset_map(), "game_over_opacity": opacity}
++        rows = conn.execute(
++            "SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN (%s, %s)",
++            ("game_over_opacity", "game_over_video_muted"),
++        ).fetchall()
++    settings = {row["setting_key"]: row["setting_value"] for row in rows}
++    return {
++        "assets": public_asset_map(),
++        "game_over_opacity": int(settings.get("game_over_opacity", "65")),
++        "game_over_video_muted": settings.get("game_over_video_muted", "true").lower() == "true",
++    }
+ 
+ 
+@@ -372,18 +366,14 @@
+ def admin_assets(username: str = Depends(get_admin)):
+     with db() as conn:
+-        row = conn.execute(
+-            "SELECT setting_value FROM app_settings WHERE setting_key = %s", ("game_over_opacity",)
+-        ).fetchone()
+-    return {"assets": public_asset_map(), "game_over_opacity": int(row["setting_value"]) if row else 65}
++        rows = conn.execute(
++            "SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN (%s, %s)",
++            ("game_over_opacity", "game_over_video_muted"),
++        ).fetchall()
++    settings = {row["setting_key"]: row["setting_value"] for row in rows}
++    return {
++        "assets": public_asset_map(),
++        "game_over_opacity": int(settings.get("game_over_opacity", "65")),
++        "game_over_video_muted": settings.get("game_over_video_muted", "true").lower() == "true",
++    }
+ 
+ 
+@@ -464,6 +454,5 @@
+     check_same_origin(request)
+     if not 10 <= body.game_over_opacity <= 100:
+-        raise HTTPException(status_code=422, detail="Image opacity must be between 10 and 100.")
++        raise HTTPException(status_code=422, detail="Video opacity must be between 10 and 100.")
+     with db() as conn:
+         conn.execute(
+@@ -472,15 +461,14 @@
+             ("game_over_opacity", str(body.game_over_opacity)),
+         )
+-    return {"ok": True, "game_over_opacity": body.game_over_opacity}
++        conn.execute(
++            "INSERT INTO app_settings(setting_key, setting_value) VALUES (%s, %s) "
++            "ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value",
++            ("game_over_video_muted", "true" if body.game_over_video_muted else "false"),
++        )
++    return {
++        "ok": True,
++        "game_over_opacity": body.game_over_opacity,
++        "game_over_video_muted": body.game_over_video_muted,
++    }
+ 
+ 
+diff --git a/game.js b/game.js
+--- a/game.js
++++ b/game.js
+@@ -19,6 +19,5 @@
+   const customPhotoPreview = document.getElementById("customPhotoPreview");
+   const currentBirdLabel = document.getElementById("currentBirdLabel");
+-  const lossImageBackdrop = document.getElementById("lossImageBackdrop");
++  const lossVideoBackdrop = document.getElementById("lossVideoBackdrop");
+ 
+   let defaultAssets = {};
+@@ -29,16 +28,14 @@
+   let flapAudioBuffer = null;
+   let hitAudioBuffer = null;
+-  const activeUploadedSources = new Set();
++  const PILLAR_SOUND_COUNT = 4;
++  const pillarAudioPlayers = Array(PILLAR_SOUND_COUNT).fill(null);
++  const pillarAudioBuffers = Array(PILLAR_SOUND_COUNT).fill(null);
++  const activeUploadedSources = new Map();
+   let resultRevealTimer = null;
+   let selectedFlapPack = "random";
+   let selectedHitPack = "random";
+-  let lossImageUrl = null;
++  let gameOverVideoUrl = null;
++  let gameOverVideoMuted = true;
++  let nextPillarSoundSlot = 0;
+ 
+   const W = canvas.width;
+@@ -89,7 +86,5 @@
+     if (mode === "ready") {
+       clearResultRevealTimer();
+-      stageWrap.classList.remove("show-loss-image");
+-      lossImageBackdrop.classList.add("hidden");
++      stopGameOverVideo();
+       overlayCard.classList.remove("result-mode");
+       overlayKicker.textContent = "WELCOME TO THE SKY";
+@@ -175,38 +170,33 @@
+   }
+ 
+-  function playUploadedSound(player, buffer) {
++  function playUploadedSound(player, buffer, channel = "effect") {
+     if (!soundEnabled) return;
+ 
+-    // Decoded buffers are more reliable for collision events than restarting an HTMLAudioElement.
++    // Only one voice per channel is active. A new flap retriggers the same sound
++    // instead of layering on top of the previous tap and creating an echo.
+     const audio = getAudio();
+     if (audio && audio.state === "running" && buffer) {
+       try {
++        const previous = activeUploadedSources.get(channel);
++        if (previous) {
++          const now = audio.currentTime;
++          try {
++            previous.gain.gain.cancelScheduledValues(now);
++            previous.gain.gain.setValueAtTime(previous.gain.gain.value, now);
++            previous.gain.gain.linearRampToValueAtTime(0.0001, now + 0.012);
++            previous.source.stop(now + 0.014);
++          } catch { /* Previous playback may already have ended. */ }
++        }
+         const source = audio.createBufferSource();
+         const gain = audio.createGain();
+         source.buffer = buffer;
+-        gain.gain.value = 0.9;
++        gain.gain.value = 0.88;
+         source.connect(gain);
+         gain.connect(audio.destination);
+-        activeUploadedSources.add(source);
+-        source.addEventListener("ended", () => activeUploadedSources.delete(source), { once: true });
++        const voice = { source, gain };
++        activeUploadedSources.set(channel, voice);
++        source.addEventListener("ended", () => {
++          if (activeUploadedSources.get(channel) === voice) activeUploadedSources.delete(channel);
++        }, { once: true });
+         source.start(0);
+         return;
+@@ -216,29 +206,15 @@
+     }
+ 
+-    if (!player) {
+-      console.warn("No uploaded audio player is available for this sound.");
+-      return;
+-    }
++    if (!player) return;
+     try {
+-      // Use a fresh media element so a previous play/pause or ended state cannot block the hit.
+-      const playbackPlayer = player.cloneNode(true);
+-      playbackPlayer.volume = 0.95;
+-      playbackPlayer.muted = false;
+-      playbackPlayer.currentTime = 0;
+-      const playback = playbackPlayer.play();
++      // Reuse one media element instead of cloning overlapping copies.
++      player.pause();
++      player.currentTime = 0;
++      player.volume = 0.9;
++      player.muted = false;
++      const playback = player.play();
+       if (playback && typeof playback.catch === "function") {
+         playback.catch(error => console.warn("Uploaded sound playback was blocked.", error));
+       }
+-      playbackPlayer.addEventListener("ended", () => {
+-        playbackPlayer.removeAttribute("src");
+-        playbackPlayer.load();
+-      }, { once: true });
+     } catch (error) {
+       console.warn("Uploaded sound playback failed.", error);
+@@ -247,16 +223,12 @@
+ 
+   function stopUploadedSounds() {
+-    for (const source of activeUploadedSources) {
+-      try { source.stop(); } catch { /* A source may already have ended. */ }
++    for (const voice of activeUploadedSources.values()) {
++      try { voice.source.stop(); } catch { /* A source may already have ended. */ }
+     }
+     activeUploadedSources.clear();
+-    for (const player of [flapAudio, hitAudio]) {
++    for (const player of [flapAudio, hitAudio, ...pillarAudioPlayers]) {
+       if (!player) continue;
+       player.pause();
+-      player.currentTime = 0;
++      try { player.currentTime = 0; } catch { /* Ignore media seek errors. */ }
+     }
+   }
+@@ -265,11 +237,9 @@
+     if (!soundEnabled) return;
+     const now = performance.now();
+-    if (now - lastFlapTime < 85) return;
++    if (now - lastFlapTime < 110) return;
+     lastFlapTime = now;
+ 
+     if (selectedFlapPack === "uploaded") {
+-      playUploadedSound(flapAudio, flapAudioBuffer);
++      playUploadedSound(flapAudio, flapAudioBuffer, "flap");
+       return;
+@@ -285,12 +255,10 @@
+ 
+     if (selectedHitPack === "uploaded") {
+-      playUploadedSound(hitAudio, hitAudioBuffer);
++      playUploadedSound(hitAudio, hitAudioBuffer, "hit");
+       return;
+     }
+ 
+     if (selectedHitPack === "selected") {
+-      if (selectedFlapPack === "uploaded") playUploadedSound(flapAudio, flapAudioBuffer);
++      if (selectedFlapPack === "uploaded") playUploadedSound(flapAudio, flapAudioBuffer, "flap");
+       else playTonePack(selectedFlapPack === "random" ? "vine" : selectedFlapPack);
+       return;
+@@ -303,14 +271,14 @@
+   }
+ 
++  function playPillarSound(slot) {
++    if (!soundEnabled) return;
++    const index = slot % PILLAR_SOUND_COUNT;
++    if (pillarAudioPlayers[index] || pillarAudioBuffers[index]) {
++      playUploadedSound(pillarAudioPlayers[index], pillarAudioBuffers[index], `pillar-${index + 1}`);
++    } else {
++      scoreSound();
++    }
++  }
++
+   function scoreSound() {
+     if (!soundEnabled) return;
+@@ -334,5 +302,5 @@
+     particles = [];
+     bird = { x: 145, y: 330, vy: 0, rotation: 0, wing: 0 };
++    nextPillarSoundSlot = 0;
+     updateHud();
+   }
+@@ -340,10 +308,7 @@
+   function startGame() {
+     clearResultRevealTimer();
++    stopUploadedSounds();
++    stopGameOverVideo();
+     getAudio();
+-    stageWrap.classList.remove("show-loss-image");
+-    lossImageBackdrop.classList.add("hidden");
+-    lossImageBackdrop.removeAttribute("src");
+     resetGame();
+     state = "playing";
+@@ -375,18 +340,18 @@
+   }
+ 
++  function stopGameOverVideo() {
++    if (!lossVideoBackdrop) return;
++    lossVideoBackdrop.pause();
++    lossVideoBackdrop.classList.add("hidden");
++    lossVideoBackdrop.removeAttribute("src");
++    lossVideoBackdrop.load();
++    stageWrap.classList.remove("show-loss-image");
++  }
++
+   function gameOver() {
+     if (state !== "playing") return;
+     state = "over";
+     shake = 10;
++    stopUploadedSounds();
+     hitSound();
+     if (score > best) {
+@@ -397,43 +362,32 @@
+     clearResultRevealTimer();
+ 
+-    if (lossImageUrl) {
+-      // Show the uploaded image by itself first. The result card appears after 8 seconds.
+-      lossImageBackdrop.src = lossImageUrl;
+-      lossImageBackdrop.style.opacity = String(gameOverOpacity / 100);
+-      lossImageBackdrop.classList.remove("hidden");
++    if (gameOverVideoUrl) {
++      lossVideoBackdrop.src = gameOverVideoUrl;
++      lossVideoBackdrop.style.opacity = String(gameOverOpacity / 100);
++      lossVideoBackdrop.muted = gameOverVideoMuted || !soundEnabled;
++      lossVideoBackdrop.loop = true;
++      lossVideoBackdrop.classList.remove("hidden");
+       stageWrap.classList.add("show-loss-image");
+       overlay.classList.add("hidden");
++      const playback = lossVideoBackdrop.play();
++      if (playback && typeof playback.catch === "function") {
++        playback.catch(async error => {
++          console.warn("Game-over video playback was blocked.", error);
++          if (!lossVideoBackdrop.muted) {
++            lossVideoBackdrop.muted = true;
++            try { await lossVideoBackdrop.play(); } catch (retryError) {
++              console.warn("Muted game-over video playback was also blocked.", retryError);
++            }
++          }
++        });
++      }
+       resultRevealTimer = window.setTimeout(() => {
+         resultRevealTimer = null;
+         if (state !== "over") return;
+-        lossImageBackdrop.classList.add("hidden");
+-        lossImageBackdrop.removeAttribute("src");
+-        stageWrap.classList.remove("show-loss-image");
++        stopGameOverVideo();
+         setOverlay("over");
+       }, 8000);
+     } else {
+-      stageWrap.classList.remove("show-loss-image");
+-      lossImageBackdrop.classList.add("hidden");
+-      lossImageBackdrop.removeAttribute("src");
++      stopGameOverVideo();
+       setOverlay("over");
+     }
+@@ -444,12 +398,11 @@
+     const maxTop = FLOOR - PIPE_GAP - 105;
+     const topHeight = minTop + Math.random() * (maxTop - minTop);
+-    pipes.push({ x: W + 8, top: topHeight, scored: false, wobble: Math.random() * Math.PI * 2 });
++    pipes.push({
++      x: W + 8,
++      top: topHeight,
++      scored: false,
++      soundSlot: nextPillarSoundSlot++ % PILLAR_SOUND_COUNT,
++      wobble: Math.random() * Math.PI * 2
++    });
+   }
+ 
+@@ -489,6 +442,5 @@
+         score++;
+         updateHud();
+-        scoreSound();
++        playPillarSound(pipe.soundSlot);
+         addBurst(bird.x + 10, bird.y, "#fff0ad");
+       }
+@@ -500,8 +452,6 @@
+     pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH + 8 > 0);
+ 
+-    const extent = avatarImage ? CHARACTER_RADIUS : 29;
+-    if (bird.y - extent < 0 || bird.y + extent > FLOOR) gameOver();
++    const hitbox = birdCollisionRadii();
++    if (bird.y - hitbox.ry < 0 || bird.y + hitbox.ry > FLOOR) gameOver();
+ 
+     for (const particle of particles) {
+@@ -515,47 +465,39 @@
+   }
+ 
++  function birdDrawSize() {
++    if (!avatarImage) return { width: 68, height: 68 };
++    const naturalWidth = avatarImage.naturalWidth || avatarImage.width || 1;
++    const naturalHeight = avatarImage.naturalHeight || avatarImage.height || 1;
++    const scale = Math.min(88 / naturalWidth, 88 / naturalHeight);
++    return { width: naturalWidth * scale, height: naturalHeight * scale };
++  }
++
++  function birdCollisionRadii() {
++    const size = birdDrawSize();
++    // Fit the collision ellipse to the rendered character, not a fixed 88x88 box.
++    return avatarImage
++      ? { rx: Math.max(10, size.width * 0.38), ry: Math.max(10, size.height * 0.38) }
++      : { rx: 25, ry: 25 };
++  }
++
++  function ellipseIntersectsRect(cx, cy, rx, ry, left, top, right, bottom) {
++    const closestX = Math.max(left, Math.min(cx, right));
++    const closestY = Math.max(top, Math.min(cy, bottom));
++    const dx = (cx - closestX) / rx;
++    const dy = (cy - closestY) / ry;
++    return dx * dx + dy * dy <= 1;
++  }
++
+   function collidesWithPipe(pipe) {
+-    const extent = avatarImage ? CHARACTER_RADIUS : 29;
+-    const birdLeft = bird.x - extent;
+-    const birdRight = bird.x + extent;
+-    const birdTop = bird.y - extent;
+-    const birdBottom = bird.y + extent;
+-    const overlapsX = birdRight > pipe.x && birdLeft < pipe.x + PIPE_WIDTH;
+-    if (!overlapsX) return false;
+-    return birdTop < pipe.top || birdBottom > pipe.top + PIPE_GAP;
++    const { rx, ry } = birdCollisionRadii();
++    const pipeLeft = pipe.x - 3;
++    const pipeRight = pipe.x + PIPE_WIDTH + 3;
++    const topCollision = ellipseIntersectsRect(
++      bird.x, bird.y, rx, ry, pipeLeft, -12, pipeRight, pipe.top
++    );
++    const bottomCollision = ellipseIntersectsRect(
++      bird.x, bird.y, rx, ry, pipeLeft, pipe.top + PIPE_GAP, pipeRight, FLOOR
++    );
++    return topCollision || bottomCollision;
+   }
+ 
+@@ -663,12 +605,5 @@
+       // Use the uploaded cutout exactly as supplied. Preserve its aspect ratio and alpha channel.
+       // No circular mask, cropping, border, or automatic background removal is applied.
+-      const naturalWidth = avatarImage.naturalWidth || avatarImage.width || 1;
+-      const naturalHeight = avatarImage.naturalHeight || avatarImage.height || 1;
+-      const maxWidth = 88;
+-      const maxHeight = 88;
+-      const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight);
+-      const drawWidth = naturalWidth * scale;
+-      const drawHeight = naturalHeight * scale;
++      const { width: drawWidth, height: drawHeight } = birdDrawSize();
+       ctx.save();
+       ctx.shadowColor = "rgba(16, 37, 52, .24)";
+@@ -756,7 +691,7 @@
+     try { localStorage.setItem("skyhop-sound", soundEnabled ? "on" : "off"); } catch { /* Ignore storage errors. */ }
+     updateSoundButton();
++    if (lossVideoBackdrop && state === "over") {
++      lossVideoBackdrop.muted = gameOverVideoMuted || !soundEnabled;
++    }
+     if (!soundEnabled) {
+       stopUploadedSounds();
+@@ -772,18 +707,17 @@
+     const player = new Audio(asset.url);
+     player.preload = "auto";
++    const pillarMatch = kind.match(/^pillar_sound_(\d+)$/);
++    const pillarIndex = pillarMatch ? Number(pillarMatch[1]) - 1 : -1;
++
+     if (kind === "flap") {
+       flapAudio = player;
+       selectedFlapPack = "uploaded";
+-    } else {
++    } else if (kind === "hit") {
+       hitAudio = player;
+       selectedHitPack = "uploaded";
++    } else if (pillarIndex >= 0 && pillarIndex < PILLAR_SOUND_COUNT) {
++      pillarAudioPlayers[pillarIndex] = player;
+     }
++
+     try {
+       const response = await fetch(asset.url, { cache: "no-store" });
+@@ -794,9 +728,8 @@
+       const buffer = await audio.decodeAudioData(bytes.slice(0));
+       if (kind === "flap" && flapAudio === player) flapAudioBuffer = buffer;
+-      if (kind === "hit" && hitAudio === player) hitAudioBuffer = buffer;
++      else if (kind === "hit" && hitAudio === player) hitAudioBuffer = buffer;
++      else if (pillarIndex >= 0 && pillarIndex < PILLAR_SOUND_COUNT && pillarAudioPlayers[pillarIndex] === player) {
++        pillarAudioBuffers[pillarIndex] = buffer;
++      }
+     } catch (error) {
+       console.warn(`Could not decode creator ${kind} sound; audio-element playback will be used.`, error);
+@@ -813,7 +746,6 @@
+         ? Number(data.game_over_opacity)
+         : 65;
+-      lossImageBackdrop.style.opacity = String(gameOverOpacity / 100);
++      gameOverVideoMuted = data.game_over_video_muted !== false;
++      lossVideoBackdrop.style.opacity = String(gameOverOpacity / 100);
+ 
+       const character = defaultAssets.character;
+@@ -833,22 +765,19 @@
+       }
+ 
+-      if (defaultAssets.game_over_image?.url) {
+-        lossImageUrl = defaultAssets.game_over_image.url;
++      if (defaultAssets.game_over_video?.url) {
++        gameOverVideoUrl = defaultAssets.game_over_video.url;
++        lossVideoBackdrop.src = gameOverVideoUrl;
++        lossVideoBackdrop.muted = true;
++        lossVideoBackdrop.load();
+       }
++      const pillarLoads = Array.from({ length: PILLAR_SOUND_COUNT }, (_, index) => {
++        const key = `pillar_sound_${index + 1}`;
++        return loadDefaultSound(key, defaultAssets[key]);
++      });
+       await Promise.all([
+         loadDefaultSound("flap", defaultAssets.flap_sound),
+-        loadDefaultSound("hit", defaultAssets.collision_sound)
++        loadDefaultSound("hit", defaultAssets.collision_sound),
++        ...pillarLoads
+       ]);
+     } catch (error) {
+diff --git a/admin.html b/admin.html
+--- a/admin.html
++++ b/admin.html
+@@ -30,6 +30,5 @@
+     .asset-current { min-height:58px; display:flex; align-items:center; gap:10px; margin-bottom:12px; color:#9aabba; font-size:11px; overflow-wrap:anywhere; }
+     .asset-current img { width:84px; height:84px; object-fit:contain; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,.04); }
++    .asset-current video { display:block; width:100%; max-width:260px; max-height:150px; border:1px solid var(--line); border-radius:8px; background:#080f18; }
+     .asset-current audio { width:100%; max-width:260px; height:36px; }
+     .asset-actions { display:flex; flex-wrap:wrap; gap:8px; }
+@@ -45,6 +45,5 @@
+         <a class="brand" href="/" aria-label="Back to Sky Hop"><span class="brand-mark">✦</span><span>SKY HOP<span class="brand-period">.</span></span></a>
+         <h1>Admin settings</h1>
+-        <p>You control the default images and sounds. Visitors can only play the game.</p>
++        <p>Manage the shared character, sound effects, and game-over video. Visitors can only play the game.</p>
+       </div>
+       <a class="back-link" href="/">← BACK TO GAME</a>
+@@ -75,14 +74,9 @@
+             <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE IMAGE</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+           </article>
+-          <article class="asset-card" data-kind="game_over_image">
+-            <h3>Game-over image</h3><p>Displayed for eight seconds after a collision, before the score card.</p>
+-            <div class="asset-current" data-current>No image selected.</div>
+-            <input class="file-picker" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+-            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE IMAGE</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
++          <article class="asset-card" data-kind="game_over_video">
++            <h3>Game-over video</h3><p>Plays for eight seconds after a collision, before the score card. MP4 or WebM, up to 50 MB.</p>
++            <div class="asset-current" data-current>No video selected.</div>
++            <input class="file-picker" type="file" accept="video/mp4,video/webm,.mp4,.webm">
++            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE VIDEO</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+           </article>
+           <article class="asset-card" data-kind="flap_sound">
+@@ -98,44 +92,40 @@
+             <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
+           </article>
++          <article class="asset-card" data-kind="pillar_sound_1">
++            <h3>Pillar 1 pass sound</h3><p>Played when you pass pillar 1. These four sounds repeat in order as the game continues.</p>
++            <div class="asset-current" data-current>No sound selected.</div>
++            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
++            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
++          </article>
++          <article class="asset-card" data-kind="pillar_sound_2">
++            <h3>Pillar 2 pass sound</h3><p>Played when you pass pillar 2. These four sounds repeat in order as the game continues.</p>
++            <div class="asset-current" data-current>No sound selected.</div>
++            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
++            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
++          </article>
++          <article class="asset-card" data-kind="pillar_sound_3">
++            <h3>Pillar 3 pass sound</h3><p>Played when you pass pillar 3. These four sounds repeat in order as the game continues.</p>
++            <div class="asset-current" data-current>No sound selected.</div>
++            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
++            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
++          </article>
++          <article class="asset-card" data-kind="pillar_sound_4">
++            <h3>Pillar 4 pass sound</h3><p>Played when you pass pillar 4. These four sounds repeat in order as the game continues.</p>
++            <div class="asset-current" data-current>No sound selected.</div>
++            <input class="file-picker" type="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,.mp3,.wav,.ogg,.m4a,.aac">
++            <div class="asset-actions"><button class="admin-button upload-button" type="button">SAVE SOUND</button><button class="admin-button danger remove-button" type="button">REMOVE</button></div>
++          </article>
+         </div>
+         <p class="admin-status" id="assetStatus" aria-live="polite"></p>
+         <div class="asset-card" style="margin-top:14px">
+-          <h3>Game-over image transparency</h3>
+-          <p>Choose how transparent your game-over image appears during its eight-second display.</p>
+-          <label class="field-label" for="adminOpacity">IMAGE OPACITY <strong id="adminOpacityValue">65%</strong></label>
++          <h3>Game-over video settings</h3>
++          <p>Control the video's transparency and whether its original audio is played during the eight-second display.</p>
++          <label class="field-label" for="adminOpacity">VIDEO OPACITY <strong id="adminOpacityValue">65%</strong></label>
+           <input id="adminOpacity" class="opacity-slider" type="range" min="10" max="100" value="65">
+-          <button class="admin-button" id="saveOpacityButton" type="button" style="margin-top:10px">SAVE OPACITY</button>
++          <label style="display:flex;align-items:center;gap:9px;margin-top:12px;color:#aab8c8;font-size:11px">
++            <input id="adminVideoMuted" type="checkbox" checked>
++            MUTE VIDEO AUDIO
++          </label>
++          <button class="admin-button" id="saveSettingsButton" type="button" style="margin-top:10px">SAVE VIDEO SETTINGS</button>
+         </div>
+       </div>
+diff --git a/admin.js b/admin.js
+--- a/admin.js
++++ b/admin.js
+@@ -29,5 +29,5 @@
+     $("adminOpacity").value = result.game_over_opacity ?? 65;
+     $("adminOpacityValue").textContent = `${$("adminOpacity").value}%`;
++    $("adminVideoMuted").checked = result.game_over_video_muted !== false;
+     for (const card of document.querySelectorAll(".asset-card[data-kind]")) {
+       const kind = card.dataset.kind;
+@@ -36,18 +36,16 @@
+       current.replaceChildren();
+       if (!asset) {
+-        current.textContent = kind.includes("sound") ? "No sound selected." : "No image selected.";
++        current.textContent = kind.includes("sound") ? "No sound selected." : kind === "game_over_video" ? "No video selected." : "No image selected.";
+         continue;
+       }
+-      if (kind.includes("sound")) {
++      if (kind === "game_over_video") {
++        const video = document.createElement("video");
++        video.controls = true;
++        video.playsInline = true;
++        video.preload = "metadata";
++        video.muted = true;
++        video.src = asset.url;
++        current.append(video);
++      } else if (kind.includes("sound")) {
+         const audio = document.createElement("audio");
+         audio.controls = true;
+@@ -132,18 +130,15 @@
+   });
+ 
+-  $("saveOpacityButton").addEventListener("click", async () => {
++  $("saveSettingsButton").addEventListener("click", async () => {
+     try {
+       await api("/api/admin/settings", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ game_over_opacity: Number($("adminOpacity").value) })
++        body: JSON.stringify({
++          game_over_opacity: Number($("adminOpacity").value),
++          game_over_video_muted: $("adminVideoMuted").checked
++        })
+       });
+-      status(assetStatus, "Image opacity saved.");
++      status(assetStatus, "Video settings saved.");
+     } catch (error) {
+       status(assetStatus, error.message, true);
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -42,6 +42,5 @@
+       <div class="stage-wrap">
+         <canvas id="gameCanvas" width="480" height="720" aria-label="Sky Hop game canvas. Tap or press Space to flap."></canvas>
+-        <img class="loss-image-backdrop hidden" id="lossImageBackdrop" alt="" aria-hidden="true">
++        <video class="loss-video-backdrop hidden" id="lossVideoBackdrop" aria-hidden="true" playsinline preload="auto"></video>
+         <div class="game-overlay" id="gameOverlay">
+           <div class="overlay-card" id="overlayCard">
+diff --git a/style.css b/style.css
+--- a/style.css
++++ b/style.css
+@@ -120,8 +120,6 @@
+ .stage-wrap { isolation: isolate; }
+ .stage-wrap > canvas { position: relative; z-index: 0; }
+-.loss-image-backdrop { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; object-fit: cover; opacity: .65; pointer-events: none; }
+-.loss-image-backdrop.hidden { display: none !important; visibility: hidden !important; }
++.loss-video-backdrop { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; object-fit: cover; opacity: .65; pointer-events: none; background: #101b2b; }
++.loss-video-backdrop.hidden { display: none !important; visibility: hidden !important; }
+ .game-overlay { z-index: 2; }
+ .overlay-card { position: relative; overflow: hidden; }
+@@ -130,6 +128,5 @@
+ .secondary-button[hidden] { display: none; }
+ 
+-/* The custom defeat image belongs to the game stage only. The score header is a sibling and never receives this layer. */
++/* The custom defeat video belongs to the game stage only. The score header is a sibling and never receives this layer. */
+ .stage-wrap { position: relative; z-index: 0; overflow: hidden; isolation: isolate; }
+ .game-toolbar { position: relative; z-index: 1; }
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -5,6 +5,5 @@
+ ## Features
+ 
+-- Creator-selected character image, game-over image, flap sound, and collision sound.
++- Creator-selected character image, game-over video, flap sound, collision sound, and four rotating pillar-pass sounds.
+ - Public visitors receive the creator's default assets.
+-- Private `/admin` login for managing the four default assets.
++- Private `/admin` login for managing the shared game assets.
+@@ -66,13 +65,10 @@
+ 
+ 1. Visit `/admin` and sign in with the configured administrator credentials.
+--2. Upload or replace the friend face cutout, game-over image, flap sound, and collision sound.
+-3. Adjust game-over image opacity and save.
++2. Upload or replace the friend face cutout, game-over video, flap sound, collision sound, and four pillar-pass sounds.
++3. Choose whether the game-over video is muted and adjust its opacity.
+ 4. Visitors do not have upload controls or need access keys. They simply play with the current creator defaults.
+ 
+--For the character, use a transparent PNG cutout where possible. The game renders the uploaded image as-is, preserving its aspect ratio and transparency. It does not crop the image into a circle or remove backgrounds automatically.
++For the character, use a transparent PNG cutout where possible. The game renders the uploaded image as-is, preserving its aspect ratio and transparency. It does not crop the image into a circle or remove backgrounds automatically. Game-over videos accept MP4 or WebM files up to 50 MB. The admin can choose muted or unmuted playback. Four pillar-pass sounds are assigned in sequence and then repeat.
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,4 +1,6 @@
+     assets = {kind: None for kind in ASSET_RULES}
+     for row in rows:
++        if row["kind"] not in assets:
++            continue
+         assets[row["kind"]] = {
+             "url": object_url(row["object_key"]),
